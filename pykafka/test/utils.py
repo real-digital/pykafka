@@ -19,6 +19,17 @@ def get_cluster():
                                os.environ['BROKERS'],
                                os.environ['ZOOKEEPER'],
                                os.environ.get('BROKERS_SSL', None))
+    elif os.environ.get('HOSTS_FILE', None):
+        # Broker is already running. Use that.
+        hosts = {}
+        with open(os.environ['HOSTS_FILE'], 'r') as o:
+            for line in o:
+                name, host = line.split('=', 1)
+                hosts[name.strip()] = host.strip()
+        return KafkaConnection(os.environ['KAFKA_BIN'],
+                               hosts['BROKERS'],
+                               hosts['ZOOKEEPER'],
+                               hosts.get('BROKERS_SSL', None))
     else:
         return KafkaInstance(num_instances=3)
 
