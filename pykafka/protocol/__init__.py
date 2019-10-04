@@ -26,6 +26,7 @@ from .offset_commit import (GroupCoordinatorRequest, GroupCoordinatorResponse,
                             OffsetFetchRequestV1, OffsetFetchResponseV1,
                             OffsetFetchRequestV2, OffsetFetchResponseV2)
 from .produce import ProduceRequest, ProduceResponse, ProducePartitionResponse
+from .sasl import SaslHandshakeRequest, SaslHandshakeRequestV1, SaslHandshakeResponse, SaslHandshakeResponseV1
 
 """
 Author: Keith Bourgoin, Emmett Butler
@@ -44,18 +45,18 @@ https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol
 Each message is encoded as either a Request or Response:
 
 RequestOrResponse => Size (RequestMessage | ResponseMessage)
-  Size => int32
+  Size => int32
 
 RequestMessage => ApiKey ApiVersion CorrelationId ClientId RequestMessage
-  ApiKey => int16
-  ApiVersion => int16
-  CorrelationId => int32
-  ClientId => string
-  RequestMessage => MetadataRequest | ProduceRequest | FetchRequest | OffsetRequest | OffsetCommitRequest | OffsetFetchRequest
+  ApiKey => int16
+  ApiVersion => int16
+  CorrelationId => int32
+  ClientId => string
+  RequestMessage => MetadataRequest | ProduceRequest | FetchRequest | OffsetRequest | OffsetCommitRequest | OffsetFetchRequest
 
 Response => CorrelationId ResponseMessage
-  CorrelationId => int32
-  ResponseMessage => MetadataResponse | ProduceResponse | FetchResponse | OffsetResponse | OffsetCommitResponse | OffsetFetchResponse
+  CorrelationId => int32
+  ResponseMessage => MetadataResponse | ProduceResponse | FetchResponse | OffsetResponse | OffsetCommitResponse | OffsetFetchResponse
 """
 __all__ = ["MetadataRequest", "MetadataResponse", "ProduceRequest", "ProduceResponse",
            "PartitionFetchRequest", "FetchRequest", "FetchPartitionResponse",
@@ -79,4 +80,5 @@ __all__ = ["MetadataRequest", "MetadataResponse", "ProduceRequest", "ProduceResp
            "OffsetFetchResponseV1", "OffsetFetchRequestV2", "OffsetFetchResponseV2",
            "MetadataRequestV2", "MetadataResponseV2", "MetadataRequestV3",
            "MetadataResponseV3", "MetadataRequestV4", "MetadataResponseV4",
-           "MetadataRequestV5", "MetadataResponseV5"]
+           "MetadataRequestV5", "MetadataResponseV5", "SaslHandshakeRequest",
+           "SaslHandshakeRequestV1", "SaslHandshakeResponse", "SaslHandshakeResponseV1"]
