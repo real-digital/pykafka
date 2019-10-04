@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 _kafka_properties = """
 # Configurable settings
 broker.id={broker_id}
-{port_config}
+listeners={listeners}
 zookeeper.connect={zk_connstr}
 log.dirs={data_dir}
 
@@ -57,7 +57,6 @@ delete.topic.enable=true
 """
 
 _kafka_ssl_properties = """
-listeners=PLAINTEXT://localhost:{port},SSL://localhost:{ssl_port}
 ssl.keystore.location={keystore_path}
 ssl.keystore.password={store_pass}
 ssl.key.password={store_pass}
@@ -298,15 +297,9 @@ class KafkaInstance(ManagedInstance):
         Returns a proc handler for the new broker.
         """
         # make port config for new broker
-        if self.certs is not None:
-            port_config = _kafka_ssl_properties.format(
-                port=port,
-                ssl_port=ssl_port,
-                keystore_path=self.certs.keystore,
-                truststore_path=self.certs.truststore,
-                store_pass=self.certs.broker_pass)
-        else:
-            port_config = "port={}".format(port)
+        listeners = ['PLAINTEXT://localhost:' + str(port)]
+        if ssl_port is not None:
+            listeners.append('SSL://localhost:'+str(ssl_port))
 
         self._brokers_started += 1
         i = self._brokers_started
@@ -314,13 +307,21 @@ class KafkaInstance(ManagedInstance):
         # write conf file for the new broker
         conf = os.path.join(self._conf_dir,
                             'kafka_{instance}.properties'.format(instance=i))
+
         with open(conf, 'w') as f:
             f.write(_kafka_properties.format(
                 broker_id=i,
-                port_config=port_config,
+                listeners=','.join(listeners),
                 zk_connstr=self.zookeeper,
                 data_dir=self._data_dir + '_{instance}'.format(instance=i),
             ))
+            if ssl_port:
+                f.write(_kafka_ssl_properties.format(
+                    port=port,
+                    keystore_path=self.certs.keystore,
+                    truststore_path=self.certs.truststore,
+                    store_pass=self.certs.broker_pass)
+                )
 
         # start process and append to self._broker_procs
         binfile = os.path.join(self._bin_dir, 'bin/kafka-server-start.sh')
@@ -338,7 +339,6 @@ class KafkaInstance(ManagedInstance):
         self._add_ssl_broker(ssl_port)
 
         return new_proc
-
 
     def _start_brokers(self):
         """Start all brokers and return used ports."""
