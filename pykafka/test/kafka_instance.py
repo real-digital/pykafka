@@ -151,7 +151,7 @@ class KafkaInstance(ManagedInstance):
                  use_gevent=False):
         """Start kafkainstace with given settings"""
         self._num_instances = num_instances
-        self._kafka_version = kafka_version
+        self._kafka_version = tuple(int(v) for v in kafka_version.split('.'))
         self._scala_version = scala_version
         self._bin_dir = bin_dir
         self._processes = []
@@ -201,7 +201,7 @@ class KafkaInstance(ManagedInstance):
         url_fmt = 'https://archive.apache.org/dist/kafka/{kafka_version}/kafka_{scala_version}-{kafka_version}.tgz'
         url = url_fmt.format(
             scala_version=self._scala_version,
-            kafka_version=self._kafka_version
+            kafka_version='.'.join(str(v) for v in self._kafka_version)
         )
         p1 = subprocess.Popen(['curl', '-vs', url], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(['tar', 'xvz', '-C', self._bin_dir,
@@ -248,7 +248,7 @@ class KafkaInstance(ManagedInstance):
 
         :returns: :class:`CertManager` or None upon failure
         """
-        if self._kafka_version >= "0.9":  # no SSL support in earlier versions
+        if self._kafka_version >= (0, 9):  # no SSL support in earlier versions
             try:
                 return CertManager(self._bin_dir)
             except:  # eg. because openssl or other tools not installed
