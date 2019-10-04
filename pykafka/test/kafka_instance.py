@@ -32,6 +32,8 @@ from testinstances.exceptions import ProcessNotStartingError
 from testinstances.managed_instance import ManagedInstance
 from pykafka.utils.compat import range, get_bytes, get_string
 
+SASL_USER = 'alice'
+SASL_PASSWORD = 'alice-secret'
 
 log = logging.getLogger(__name__)
 
@@ -70,25 +72,50 @@ clientPort={zk_port}
 maxClientCnxns=0
 """
 
+_kafka_sasl_properties = """
+sasl.enabled.mechanisms=PLAIN,SCRAM-SHA-256,SCRAM-SHA-512
+security.inter.broker.protocol=SASL_PLAINTEXT
+sasl.mechanism.inter.broker.protocol=PLAIN
+"""
+
+_kafka_server_jaas_config = """
+KafkaServer {{
+    org.apache.kafka.common.security.plain.PlainLoginModule required
+    username="{user}"
+    password="{password}"
+    user_{user}="{password}";
+    
+    org.apache.kafka.common.security.scram.ScramLoginModule required
+    username="{user}"
+    password="{password}";
+}};
+
+Client {{
+}};
+"""
+
+
 class KafkaConnection(object):
     """Connection to a Kafka cluster.
 
     Provides handy access to the shell scripts Kafka is bundled with.
     """
 
-    def __init__(self, bin_dir, brokers, zookeeper, brokers_ssl=None):
+    def __init__(self, bin_dir, brokers, zookeeper, brokers_ssl=None, brokers_sasl=None):
         """Create a connection to the cluster.
 
         :param bin_dir:   Location of downloaded kafka bin
         :param brokers:   Comma-separated list of brokers
-        :param zookeeper: Connection straing for ZK
+        :param zookeeper: Connection string for ZK
         :param brokers_ssl: Comma-separated list of hosts with ssl-ports
+        :param brokers_sasl: Comma-separated list of hosts with sasl-ports
         """
         self._bin_dir = bin_dir
         self.brokers = brokers
         self.zookeeper = zookeeper
 
         self.brokers_ssl = brokers_ssl
+        self.brokers_sasl = brokers_sasl
         self.certs = CertManager(bin_dir) if brokers_ssl is not None else None
 
     def _run_topics_sh(self, args):
@@ -107,6 +134,22 @@ class KafkaConnection(object):
                              '--partitions', num_partitions,
                              '--replication-factor', replication_factor])
         time.sleep(2)
+
+    def _run_configs_sh(self, args):
+        """Run kafka-config.sh with the provided list of arguments."""
+        binfile = os.path.join(self._bin_dir, 'bin/kafka-configs.sh')
+        cmd = [binfile, '--zookeeper', self.zookeeper] + args
+        cmd = [get_string(c) for c in cmd]  # execv needs only strings
+        log.debug('running: %s', ' '.join(cmd))
+        return subprocess.check_output(cmd)
+
+    def create_scram_user(self, user, password):
+        self._run_configs_sh([
+            '--alter',
+            '--entity-type', 'users',
+            '--entity-name', user,
+            '--add-config', 'SCRAM-SHA-256=[password={pw}],SCRAM-SHA-512=[password={pw}]'.format(pw=password)
+        ])
 
     def delete_topic(self, topic_name):
         self._run_topics_sh(['--delete',
@@ -159,12 +202,21 @@ class KafkaInstance(ManagedInstance):
         self.zookeeper = None
         self.brokers = None
         self.brokers_ssl = None
+        self.brokers_sasl = None
+        self.sasl_enabled = self._kafka_version > (0, 10, 2)  # SASL Scram only supported since 0.10.2
         self.certs = self._gen_ssl_certs()
         # TODO: Need a better name so multiple can run at once.
         #       other ManagedInstances use things like 'name-port'
         ManagedInstance.__init__(self, name, use_gevent=use_gevent)
         self.connection = KafkaConnection(
             bin_dir, self.brokers, self.zookeeper, self.brokers_ssl)
+        if self.sasl_enabled:
+            log.info("Creating scram user {}".format(SASL_USER))
+            self.connection.create_scram_user(SASL_USER, SASL_PASSWORD)
+            log.info("Waiting for Cluster to fetch the userdata.")
+            # We could wait for the line "Processing override for entityPath: users/alice" but that's not completely
+            # reliable either
+            time.sleep(5)
 
     def _init_dirs(self):
         """Set up directories in the temp folder."""
@@ -242,6 +294,13 @@ class KafkaInstance(ManagedInstance):
             brokers_ssl.append(new_broker_ssl)
             self.brokers_ssl = ",".join(brokers_ssl)
 
+    def _add_sasl_broker(self, sasl_broker_port):
+        if sasl_broker_port:
+            new_broker_sasl = "localhost:{}".format(sasl_broker_port)
+            brokers_sasl = self.brokers_sasl.split(",") if self.brokers_sasl else []
+            brokers_sasl.append(new_broker_sasl)
+            self.brokers_sasl = ",".join(brokers_sasl)
+
     def _gen_ssl_certs(self):
         """Attempt generating ssl certificates for testing
 
@@ -262,10 +321,10 @@ class KafkaInstance(ManagedInstance):
         zk_port = self._start_zookeeper()
         self.zookeeper = 'localhost:{port}'.format(port=zk_port)
 
-        broker_ports, broker_ssl_ports = self._start_brokers()
+        broker_ports, broker_ssl_ports, broker_sasl_ports = self._start_brokers()
 
         # Process is started when the port isn't free anymore
-        all_ports = [zk_port] + broker_ports
+        all_ports = [zk_port] + broker_ports + broker_ssl_ports + broker_sasl_ports
         for i in range(10):
             if all(not self._is_port_free(port) for port in all_ports):
                 log.info('Kafka cluster started.')
@@ -291,15 +350,17 @@ class KafkaInstance(ManagedInstance):
                 watch_thread.daemon = True
                 watch_thread.start()
 
-    def _start_broker_proc(self, port, ssl_port=None):
+    def _start_broker_proc(self, port, ssl_port=None, sasl_port=None):
         """Start a broker proc and maintain handlers
 
         Returns a proc handler for the new broker.
         """
         # make port config for new broker
-        listeners = ['PLAINTEXT://localhost:' + str(port)]
+        listeners = ['PLAINTEXT://localhost:{}'.format(port)]
         if ssl_port is not None:
-            listeners.append('SSL://localhost:'+str(ssl_port))
+            listeners.append('SSL://localhost:{}'.format(ssl_port))
+        if sasl_port is not None:
+            listeners.append('SASL_PLAINTEXT://localhost:{}'.format(sasl_port))
 
         self._brokers_started += 1
         i = self._brokers_started
@@ -307,7 +368,7 @@ class KafkaInstance(ManagedInstance):
         # write conf file for the new broker
         conf = os.path.join(self._conf_dir,
                             'kafka_{instance}.properties'.format(instance=i))
-
+        jaas_conf = os.path.join(self._conf_dir, 'kafka_{instance}_jaas.conf'.format(instance=i))
         with open(conf, 'w') as f:
             f.write(_kafka_properties.format(
                 broker_id=i,
@@ -322,7 +383,10 @@ class KafkaInstance(ManagedInstance):
                     truststore_path=self.certs.truststore,
                     store_pass=self.certs.broker_pass)
                 )
-
+            if sasl_port:
+                f.write(_kafka_sasl_properties)
+                with open(jaas_conf, 'w') as o:
+                    o.write(_kafka_server_jaas_config.format(user=SASL_USER, password=SASL_PASSWORD))
         # start process and append to self._broker_procs
         binfile = os.path.join(self._bin_dir, 'bin/kafka-server-start.sh')
         logfile = os.path.join(self._log_dir, 'kafka_{instance}.log'.format(instance=i))
@@ -330,13 +394,15 @@ class KafkaInstance(ManagedInstance):
             args=[binfile, conf],
             stderr=utils.STDOUT,
             stdout=open(logfile, 'w'),
-            use_gevent=self.use_gevent
+            use_gevent=self.use_gevent,
+            env={} if sasl_port is None else {'KAFKA_OPTS': '-Djava.security.auth.login.config={}'.format(jaas_conf)}
         ))
         self._broker_procs.append(new_proc)
 
         # add localhost:port to internal list of (ssl)brokers
         self._add_broker(port)
         self._add_ssl_broker(ssl_port)
+        self._add_sasl_broker(sasl_port)
 
         return new_proc
 
@@ -345,7 +411,9 @@ class KafkaInstance(ManagedInstance):
         ports = self._port_generator(9092)
         used_ports = []
         used_ssl_ports = []
+        used_sasl_ports = []
         ssl_port = None
+        sasl_port = None
         for i in range(self._num_instances):
             port = next(ports)
             used_ports.append(port)
@@ -354,9 +422,12 @@ class KafkaInstance(ManagedInstance):
             if self.certs is not None:
                 ssl_port = next(ports)
                 used_ssl_ports.append(ssl_port)  # to return at end
-            self._start_broker_proc(port, ssl_port)
+            if self.sasl_enabled:
+                sasl_port = next(ports)
+                used_sasl_ports.append(sasl_port)
+            self._start_broker_proc(port, ssl_port, sasl_port)
 
-        return used_ports, used_ssl_ports
+        return used_ports, used_ssl_ports, used_sasl_ports
 
     def _start_zookeeper(self):
         port = next(self._port_generator(2181))
@@ -578,6 +649,8 @@ if __name__ == '__main__':
             f.write('BROKERS={}\n'.format(cluster.brokers))
             if cluster.brokers_ssl:
                 f.write('BROKERS_SSL={}\n'.format(cluster.brokers_ssl))
+            if cluster.brokers_sasl:
+                f.write('BROKERS_SASL={}\n'.format(cluster.brokers_sasl))
             f.write('ZOOKEEPER={}\n'.format(cluster.zookeeper))
 
     while True:
