@@ -1,12 +1,18 @@
-import platform
+from uuid import uuid4
 
-import pytest
-
-from tests.pykafka import test_sasl
+from pykafka import KafkaClient
 
 
-@pytest.mark.skipif(platform.python_implementation() == "PyPy",
-                    reason="We pass PyObject pointers as msg_opaques for "
-                           "delivery callbacks, which is unsafe on PyPy.")
-class TestRdKafkaSasl(test_sasl.SaslIntegrationTests):
-    USE_RDKAFKA = True
+def test_sasl_roundtrip_rdkafka(sasl_kafka, authenticator, kafka_version):
+    client = KafkaClient(sasl_kafka.brokers_sasl, sasl_authenticator=authenticator,
+                         broker_version='.'.join(str(v) for v in kafka_version))
+
+    topic_name = uuid4().hex.encode()
+    payload = uuid4().hex.encode()
+    topic = client.topics[topic_name]
+
+    producer = topic.get_producer(use_rdkafka=True, sync=True)
+    producer.produce(payload)
+
+    consumer = topic.get_simple_consumer(use_rdkafka=True, consumer_timeout_ms=5000)
+    assert consumer.consume().value == payload
