@@ -62,6 +62,7 @@ class Broker(object):
                  source_host='',
                  source_port=0,
                  ssl_config=None,
+                 sasl_authenticator=None,
                  broker_version="0.9.0",
                  api_versions=None):
         """Create a Broker instance.
@@ -92,6 +93,8 @@ class Broker(object):
         :type source_port: int
         :param ssl_config: Config object for SSL connection
         :type ssl_config: :class:`pykafka.connection.SslConfig`
+        :param sasl_authenticator: Authenticator to use for authentication using sasl.
+        :type sasl_authenticator: :class:`pykafka.sasl_authenticators.BaseAuthenticator`
         :param broker_version: The protocol version of the cluster being connected to.
             If this parameter doesn't match the actual broker version, some pykafka
             features may not work properly.
@@ -117,6 +120,7 @@ class Broker(object):
         self._req_handlers = {}
         self._broker_version = broker_version
         self._api_versions = api_versions
+        self._sasl_authenticator = sasl_authenticator
         try:
             self.connect()
         except SocketDisconnectedError:
@@ -144,6 +148,7 @@ class Broker(object):
                       source_host='',
                       source_port=0,
                       ssl_config=None,
+                      sasl_authenticator=None,
                       broker_version="0.9.0",
                       api_versions=None):
         """Create a Broker using BrokerMetadata
@@ -169,6 +174,8 @@ class Broker(object):
         :type source_port: int
         :param ssl_config: Config object for SSL connection
         :type ssl_config: :class:`pykafka.connection.SslConfig`
+        :param sasl_authenticator: Authenticator to use for authentication using sasl.
+        :type sasl_authenticator: :class:`pykafka.sasl_authenticators.BaseAuthenticator`
         :param broker_version: The protocol version of the cluster being connected to.
             If this parameter doesn't match the actual broker version, some pykafka
             features may not work properly.
@@ -184,6 +191,7 @@ class Broker(object):
                    source_host=source_host,
                    source_port=source_port,
                    ssl_config=ssl_config,
+                   sasl_authenticator=sasl_authenticator,
                    broker_version=broker_version,
                    api_versions=api_versions)
 
@@ -201,6 +209,22 @@ class Broker(object):
         """
         if self._offsets_channel_connection:
             return self._offsets_channel_connection.connected
+        return False
+
+    @property
+    def authenticated(self):
+        """Returns True if this object's main connection to the Kafka broker
+            is authenticated
+        """
+        return self._connection.authenticated
+
+    @property
+    def offsets_channel_authenticated(self):
+        """Returns True if this object's offsets channel connection to the
+            Kafka broker is authenticated
+        """
+        if self._offsets_channel_connection:
+            return self._offsets_channel_connection.authenticated
         return False
 
     @property
@@ -246,7 +270,8 @@ class Broker(object):
                                             buffer_size=self._buffer_size,
                                             source_host=self._source_host,
                                             source_port=self._source_port,
-                                            ssl_config=self._ssl_config)
+                                            ssl_config=self._ssl_config,
+                                            sasl_authenticator=self._sasl_authenticator)
         self._connection.connect(self._socket_timeout_ms, attempts=attempts)
         self._req_handler = RequestHandler(self._handler, self._connection)
         self._req_handler.start()

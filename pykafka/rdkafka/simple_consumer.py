@@ -64,6 +64,7 @@ class RdKafkaSimpleConsumer(SimpleConsumer):
         self._stop_poller_thread = cluster.handler.Event()
         self._broker_version = cluster._broker_version
         self._fetch_error_backoff_ms = valid_int(fetch_error_backoff_ms)
+        self._sasl_conf = {} if cluster.sasl_authenticator is None else cluster.sasl_authenticator.get_rd_kafka_opts()
         # super() must come last for the case where auto_start=True
         super(RdKafkaSimpleConsumer, self).__init__(**callargs)
 
@@ -286,6 +287,10 @@ class RdKafkaSimpleConsumer(SimpleConsumer):
             ##"offset.store.sync.interval.ms"
             ##"offset.store.method"
             }
+
+        # append configurations necessary for sasl authentication
+        conf.update(self._sasl_conf)
+
         # librdkafka expects all config values as strings:
         conf = [(key, str(conf[key])) for key in conf]
         topic_conf = [(key, str(topic_conf[key])) for key in topic_conf]

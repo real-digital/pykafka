@@ -57,6 +57,7 @@ class RdKafkaProducer(Producer):
         self._rdk_producer = None
         self._poller_thread = None
         self._stop_poller_thread = cluster.handler.Event()
+        self._sasl_conf = {} if cluster.sasl_authenticator is None else cluster.sasl_authenticator.get_rd_kafka_opts()
         # super() must come last because it calls start()
         super(RdKafkaProducer, self).__init__(**callargs)
 
@@ -191,6 +192,10 @@ class RdKafkaProducer(Producer):
             # "partitioner"  # dealt with in pykafka
             # "opaque"
         }
+
+        # append configurations necessary for sasl authentication
+        conf.update(self._sasl_conf)
+
         # librdkafka expects all config values as strings:
         conf = [(key, str(conf[key])) for key in conf]
         topic_conf = [(key, str(topic_conf[key])) for key in topic_conf]

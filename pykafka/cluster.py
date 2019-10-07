@@ -175,6 +175,7 @@ class Cluster(object):
                  source_address='',
                  zookeeper_hosts=None,
                  ssl_config=None,
+                 sasl_authenticator=None,
                  broker_version='0.9.0'):
         """Create a new Cluster instance.
 
@@ -199,6 +200,8 @@ class Cluster(object):
         :type source_address: str `'host:port'`
         :param ssl_config: Config object for SSL connection
         :type ssl_config: :class:`pykafka.connection.SslConfig`
+        :param sasl_authenticator: Authenticator to use for authentication using sasl.
+        :type sasl_authenticator: :class:`pykafka.sasl_authenticators.BaseAuthenticator`
         :param broker_version: The protocol version of the cluster being connected to.
             If this parameter doesn't match the actual broker version, some pykafka
             features may not work properly.
@@ -214,6 +217,7 @@ class Cluster(object):
         self._source_host = self._source_address.split(':')[0]
         self._source_port = 0
         self._ssl_config = ssl_config
+        self.sasl_authenticator = sasl_authenticator
         self._zookeeper_connect = zookeeper_hosts
         self._max_connection_retries = 3
         self._max_connection_retries_offset_mgr = 8
@@ -284,6 +288,7 @@ class Cluster(object):
                                     source_host=self._source_host,
                                     source_port=self._source_port,
                                     ssl_config=self._ssl_config,
+                                    sasl_authenticator=self.sasl_authenticator,
                                     broker_version=self._broker_version,
                                     api_versions=self._api_versions)
                     response = req_fn(broker)
@@ -402,6 +407,7 @@ class Cluster(object):
                     source_host=self._source_host,
                     source_port=self._source_port,
                     ssl_config=self._ssl_config,
+                    sasl_authenticator=self.sasl_authenticator,
                     broker_version=self._broker_version,
                     api_versions=self._api_versions)
             elif not self._brokers[id_].connected:

@@ -117,7 +117,8 @@ class BrokerConnection(object):
                  buffer_size=1024 * 1024,
                  source_host='',
                  source_port=0,
-                 ssl_config=None):
+                 ssl_config=None,
+                 sasl_authenticator=None):
         """Initialize a socket connection to Kafka.
 
         :param host: The host to which to connect
@@ -139,6 +140,8 @@ class BrokerConnection(object):
         :type source_port: int
         :param ssl_config: Config object for SSL connection
         :type ssl_config: :class:`pykafka.connection.SslConfig`
+        :param sasl_authenticator: Authenticator to use for authentication using sasl.
+        :type sasl_authenticator: :class:`pykafka.sasl_authenticators.BaseAuthenticator`
         """
         self._buff = bytearray(buffer_size)
         self.host = host
@@ -149,6 +152,8 @@ class BrokerConnection(object):
         self.source_port = source_port
         self._wrap_socket = (
             ssl_config.wrap_socket if ssl_config else lambda x: x)
+        self._sasl_authenticator = sasl_authenticator
+        self.authenticated = sasl_authenticator is None
 
     def __del__(self):
         """Close this connection when the object is deleted."""
@@ -161,6 +166,7 @@ class BrokerConnection(object):
 
     def connect(self, timeout, attempts=1):
         """Connect to the broker, retrying if specified."""
+        self.authenticated = False
         log.debug("Connecting to %s:%s", self.host, self.port)
         for attempt in range(0, attempts):
             try:
@@ -172,6 +178,9 @@ class BrokerConnection(object):
                     )
                 )
                 log.debug("Successfully connected to %s:%s", self.host, self.port)
+                if self._sasl_authenticator is not None:
+                    self._sasl_authenticator.authenticate(self)
+                    self.authenticated = True
                 return
             except (self._handler.SockErr, self._handler.GaiError) as err:
                 log.info("Attempt %s: failed to connect to %s:%s", attempt, self.host, self.port)
@@ -193,6 +202,7 @@ class BrokerConnection(object):
             pass
         finally:
             self._socket = None
+            self.authenticated = False
 
     def reconnect(self):
         """Disconnect from the broker, then reconnect"""
@@ -203,6 +213,7 @@ class BrokerConnection(object):
         """Send a request over the socket connection"""
         bytes_ = request.get_bytes()
         if not self._socket:
+            self.authenticated = False
             raise SocketDisconnectedError("<broker {}:{}>".format(self.host, self.port))
         try:
             self._socket.sendall(bytes_)
@@ -211,7 +222,7 @@ class BrokerConnection(object):
             self.disconnect()
             raise SocketDisconnectedError("<broker {}:{}>".format(self.host, self.port))
 
-    def response(self):
+    def response_raw(self):
         """Wait for a response from the broker"""
         size = bytes()
         expected_len = 4  # Size => int32
@@ -231,5 +242,9 @@ class BrokerConnection(object):
         except SocketDisconnectedError:
             self.disconnect()
             raise SocketDisconnectedError("<broker {}:{}>".format(self.host, self.port))
+        return self._buff[:size]
+
+    def response(self):
         # Drop CorrelationId => int32
-        return buffer(self._buff[4:4 + size])
+        return buffer(self.response_raw()[4:])
+

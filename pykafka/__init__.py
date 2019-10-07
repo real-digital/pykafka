@@ -11,6 +11,7 @@ from .client import KafkaClient
 from .balancedconsumer import BalancedConsumer
 from .managedbalancedconsumer import ManagedBalancedConsumer
 from .membershipprotocol import RangeProtocol, RoundRobinProtocol
+from .sasl_authenticators import PlainAuthenticator, ScramAuthenticator
 
 __version__ = "2.8.1-dev.2"
 
@@ -28,6 +29,8 @@ __all__ = [
     "ManagedBalancedConsumer",
     "RangeProtocol",
     "RoundRobinProtocol",
+    "PlainAuthenticator",
+    "ScramAuthenticator"
 ]
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())

@@ -88,6 +88,7 @@ class KafkaClient(object):
                  exclude_internal_topics=True,
                  source_address='',
                  ssl_config=None,
+                 sasl_authenticator=None,
                  broker_version='0.9.0'):
         """Create a connection to a Kafka cluster.
 
@@ -118,6 +119,8 @@ class KafkaClient(object):
         :type source_address: str `'host:port'`
         :param ssl_config: Config object for SSL connection
         :type ssl_config: :class:`pykafka.connection.SslConfig`
+        :param sasl_authenticator: Authenticator to use for authentication using sasl.
+        :type sasl_authenticator: :class:`pykafka.sasl_authenticators.BaseAuthenticator`
         :param broker_version: The protocol version of the cluster being connected to.
             If this parameter doesn't match the actual broker version, some pykafka
             features may not work properly.
@@ -139,6 +142,7 @@ class KafkaClient(object):
             source_address=self._source_address,
             zookeeper_hosts=zookeeper_hosts,
             ssl_config=ssl_config,
+            sasl_authenticator=sasl_authenticator,
             broker_version=broker_version)
         self.brokers = self.cluster.brokers
         self.topics = self.cluster.topics

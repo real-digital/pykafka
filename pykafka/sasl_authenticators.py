@@ -1,0 +1,184 @@
+import base64
+import hashlib
+import hmac
+import logging
+import struct
+from uuid import uuid4
+
+import six
+
+from pykafka.protocol import SaslHandshakeResponse
+from .protocol import SaslHandshakeRequest
+
+log = logging.getLogger(__name__)
+
+
+if six.PY2:
+    def xor_bytes(left, right):
+        return bytearray(ord(lb) ^ ord(rb) for lb, rb in zip(left, right))
+else:
+    def xor_bytes(left, right):
+        return bytes(lb ^ rb for lb, rb in zip(left, right))
+
+
+class FakeRequest:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get_bytes(self):
+        return struct.pack("!i", len(self.payload)) + self.payload
+
+
+class BaseAuthenticator:
+    def __init__(self, mechanism):
+        self.mechanism = mechanism
+        self.handshake_version = None
+        self.auth_version = None
+        self._broker_connection = None
+
+    def get_rd_kafka_opts(self):
+        raise NotImplementedError()
+
+    def authenticate(self, broker_connection):
+        self._broker_connection = broker_connection
+        if self.handshake_version is None:
+            self.fetch_api_versions()
+        log.debug("Authenticating to {}:{} using mechanism {}.".format(
+            self._broker_connection.host,
+            self._broker_connection.port,
+            self.mechanism)
+        )
+        self.initialize_authentication()
+        self.exchange_tokens()
+        log.debug("Authentication successful.")
+
+    def initialize_authentication(self):
+        self._broker_connection.request(SaslHandshakeRequest(self.mechanism))
+        response = SaslHandshakeResponse(self._broker_connection.response())
+        if response.error_code != 0:
+            # Todo: create correct exception here
+            msg = "Broker only supports sasl mechanisms {}, requested was {}"
+            raise RuntimeError(msg.format(",".join(response.mechanisms), self.mechanism))
+
+    def exchange_tokens(self):
+        raise NotImplementedError()
+
+    def send_token(self, token):
+        self._broker_connection.request(FakeRequest(token))
+
+    def receive_token(self):
+        return self._broker_connection.response_raw()
+
+    def fetch_api_versions(self):
+        self.handshake_version = 0
+
+        # try this later
+        # self._broker_connection.request(ApiVersionsRequest())
+        # response = ApiVersionsResponse(self._broker_connection.response())
+        # self.handshake_version = response.api_versions[17]
+        # self.auth_version = response.api_versions.get(36, None)
+
+
+class ScramAuthenticator(BaseAuthenticator):
+    MECHANISMS = {"SCRAM-SHA-256": ("sha256", hashlib.sha256), "SCRAM-SHA-512": ("sha512", hashlib.sha512)}
+
+    def __init__(self, mechanism, user, password):
+        super(ScramAuthenticator, self).__init__(mechanism)
+        self.nonce = None
+        self.auth_message = None
+        self.salted_password = None
+        self.user = user
+        self.password = password.encode()
+        self.hashname, self.hashfunc = self.MECHANISMS[mechanism]
+        self.mechanism = mechanism
+        self.stored_key = None
+        self.client_key = None
+        self.client_signature = None
+        self.client_proof = None
+        self.server_key = None
+        self.server_signature = None
+
+    def first_message(self):
+        self.nonce = str(uuid4()).replace("-", "")
+        client_first_bare = "n={},r={}".format(self.user, self.nonce)
+        self.auth_message = client_first_bare
+        return "n,," + client_first_bare
+
+    def process_server_first_message(self, server_first_message):
+        self.auth_message += "," + server_first_message
+        params = dict(pair.split("=", 1) for pair in server_first_message.split(","))
+        server_nonce = params["r"]
+        if not server_nonce.startswith(self.nonce):
+            # Todo: create correct exception here
+            raise RuntimeError("Server nonce, did not start with client nonce!")
+        self.nonce = server_nonce
+        self.auth_message += ",c=biws,r=" + self.nonce
+
+        salt = base64.b64decode(params["s"].encode())
+        iterations = int(params["i"])
+        self.create_salted_password(salt, iterations)
+
+        self.client_key = self.hmac(self.salted_password, b"Client Key")
+        self.stored_key = self.hashfunc(self.client_key).digest()
+        self.client_signature = self.hmac(self.stored_key, self.auth_message.encode())
+        self.client_proof = xor_bytes(self.client_key, self.client_signature)
+        self.server_key = self.hmac(self.salted_password, b"Server Key")
+        self.server_signature = self.hmac(self.server_key, self.auth_message.encode())
+
+    def hmac(self, key, msg):
+        return hmac.new(key, msg, digestmod=self.hashfunc).digest()
+
+    def create_salted_password(self, salt, iterations):
+        self.salted_password = hashlib.pbkdf2_hmac(self.hashname, self.password, salt, iterations)
+
+    def final_message(self):
+        return "c=biws,r={},p={}".format(self.nonce, base64.b64encode(self.client_proof).decode())
+
+    def process_server_final_message(self, server_final_message):
+        params = dict(pair.split("=", 1) for pair in server_final_message.split(","))
+        if self.server_signature != base64.b64decode(params["v"].encode()):
+            # Todo: create correct exception here
+            raise RuntimeError("Server sent wrong signature!")
+
+    def get_rd_kafka_opts(self):
+        return {
+            "sasl.mechanisms": self.mechanism,
+            "sasl.username": self.user,
+            "sasl.password": self.password.decode(),
+            'security.protocol': 'SASL_PLAINTEXT',  # TODO determine this properly
+        }
+
+    def exchange_tokens(self):
+        client_first = self.first_message()
+        self.send_token(client_first.encode())
+
+        server_first = self.receive_token().decode()
+        self.process_server_first_message(server_first)
+
+        client_final = self.final_message()
+        self.send_token(client_final.encode())
+
+        server_final = self.receive_token().decode()
+        self.process_server_final_message(server_final)
+
+
+class PlainAuthenticator(BaseAuthenticator):
+    def __init__(self, user, password):
+        super(PlainAuthenticator, self).__init__("PLAIN")
+        self.user = user
+        self.password = password
+
+    def get_rd_kafka_opts(self):
+        return {
+            "sasl.mechanisms": self.mechanism,
+            "sasl.username": self.user,
+            "sasl.password": self.password,
+            'security.protocol': 'SASL_PLAINTEXT',  # TODO determine this properly
+        }
+
+    def exchange_tokens(self):
+        self.send_token("\0".join([self.user, self.user, self.password]).encode())
+        response = self.receive_token()
+        if response != b"":
+            # Todo: create correct exception here
+            raise RuntimeError("Authentication Failed!")
