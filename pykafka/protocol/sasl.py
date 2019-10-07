@@ -12,6 +12,7 @@ class SaslHandshakeRequest(Request):
         mechanism => STRING
     """
     API_KEY = 17
+    API_VERSION = 0
 
     @classmethod
     def get_versions(cls):
@@ -26,7 +27,7 @@ class SaslHandshakeRequest(Request):
     def get_bytes(self):
         """Create new sasl handshake request"""
         output = bytearray(len(self))
-        self._write_header(output)
+        self._write_header(output, api_version=self.API_VERSION)
         offset = self.HEADER_LEN
         fmt = '!h%ds' % len(self.mechanism)
         struct.pack_into(fmt, output, offset, len(self.mechanism), self.mechanism)
@@ -40,6 +41,7 @@ class SaslHandshakeRequestV1(SaslHandshakeRequest):
     SaslHandshake Request (Version: 1) => mechanism
         mechanism => STRING
     """
+    API_VERSION = 1
 
 
 class SaslHandshakeResponse(Response):
@@ -77,6 +79,7 @@ class SaslHandshakeResponseV1(SaslHandshakeResponse):
         error_code => INT16
         mechanisms => STRING
     """
+    API_VERSION = 1
 
 
 class SaslAuthenticateRequest(Request):
@@ -87,6 +90,7 @@ class SaslAuthenticateRequest(Request):
         auth_bytes => BYTES
     """
     API_KEY = 36
+    API_VERSION = 0
 
     @classmethod
     def get_versions(cls):
@@ -103,7 +107,7 @@ class SaslAuthenticateRequest(Request):
     def get_bytes(self):
         """Create new sasl authenticate request"""
         output = bytearray(len(self))
-        self._write_header(output)
+        self._write_header(output, api_version=self.API_VERSION)
         offset = self.HEADER_LEN
         if self.auth_bytes is not None:
             fmt = '!i%ds' % len(self.auth_bytes)
@@ -121,6 +125,7 @@ class SaslAuthenticateRquestV1(SaslAuthenticateRequest):
     SaslAuthenticate Request (Version: 1) => auth_bytes
         auth_bytes => BYTES
     """
+    API_VERSION = 1
 
 
 class SaslAuthenticateResponse(Response):
@@ -148,7 +153,7 @@ class SaslAuthenticateResponse(Response):
         response = struct_helpers.unpack_from(fmt, buff, 0)
 
         self.error_code = response[0]
-        self.error_message = response[1].decode()
+        self.error_message = response[1].decode() if response[1] is not None else None
         self.auth_bytes = response[2]
 
 
