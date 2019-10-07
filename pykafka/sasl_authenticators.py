@@ -31,7 +31,26 @@ class FakeRequest:
 
 
 class BaseAuthenticator:
+    """
+    Base class for authentication mechanisms.
+    Subclasses are supposed to implement:
+     1. :meth:`BaseAuthenticator.get_rd_kafka_opts` which should return a dictionary
+        whose items will be appended to the config given to librdkafka consumers and producers.
+     2. :meth:`BaseAuthenticator.exchange_tokens` which is supposed to use :meth:`BaseAuthenticator.send_token`
+        and :meth:`BaseAuthenticator.receive_token` to send and receive the byte strings necessary to authenticate
+        with the broker.
+    """
     def __init__(self, mechanism, security_protocol=None):
+        """
+        Base class for SASL authentication mechanisms.
+
+        :param mechanism: The mechanism this authenticator is supposed to use.
+        :type mechanism: str
+        :param security_protocol: The security protocol determining the broker endpoint this
+                                  authenticator is supposed to authenticate with.
+                                  Only used for rdkafka based consumers and producers.
+        """
+
         self.mechanism = mechanism
         self.handshake_version = None
         self.auth_version = None
@@ -83,9 +102,26 @@ class BaseAuthenticator:
 
 
 class ScramAuthenticator(BaseAuthenticator):
+    """
+    Authenticates with Kafka using the salted challenge response authentication mechanism.
+    """
+
     MECHANISMS = {"SCRAM-SHA-256": ("sha256", hashlib.sha256), "SCRAM-SHA-512": ("sha512", hashlib.sha512)}
 
     def __init__(self, mechanism, user, password, security_protocol=None):
+        """
+        Create new ScramAuthenticator
+
+        :param mechanism: The mechanism this authenticator is supposed to use.
+        :type mechanism: str, one of 'SCRAM-SHA-256' or 'SCRAM-SHA-512'
+        :param user: The user to authenticate as.
+        :type user: str
+        :param password: The user's password.
+        :type password: str
+        :param security_protocol: The security protocol determining the broker endpoint this
+                                  authenticator is supposed to authenticate with.
+                                  Only used for rdkafka based consumers and producers.
+        """
         super(ScramAuthenticator, self).__init__(mechanism, security_protocol)
         self.nonce = None
         self.auth_message = None
@@ -164,7 +200,22 @@ class ScramAuthenticator(BaseAuthenticator):
 
 
 class PlainAuthenticator(BaseAuthenticator):
+    """
+    Authenticates with kafka using the Plain mechanism. I.e. sending user and password in plaintext.
+    """
+
     def __init__(self, user, password, security_protocol=None):
+        """
+        Create new PlainAuthenticator.
+
+        :param user: The user to authenticate as.
+        :type user: str
+        :param password: The user's password.
+        :type password: str
+        :param security_protocol: The security protocol determining the broker endpoint this
+                                  authenticator is supposed to authenticate with.
+                                  Only used for rdkafka based consumers and producers.
+        """
         super(PlainAuthenticator, self).__init__("PLAIN", security_protocol)
         self.user = user
         self.password = password
