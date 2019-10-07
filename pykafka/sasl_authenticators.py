@@ -7,9 +7,9 @@ from uuid import uuid4
 
 import six
 
-from pykafka.protocol import SaslHandshakeResponse
 from .exceptions import AuthenticationException, ERROR_CODES, UnsupportedSaslMechanism
-from .protocol import SaslHandshakeRequest
+from .protocol import (SaslHandshakeRequest, SaslHandshakeResponse, ApiVersionsRequest, ApiVersionsResponse,
+    SaslAuthenticateRequest, SaslAuthenticateResponse)
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +40,9 @@ class BaseAuthenticator:
         and :meth:`BaseAuthenticator.receive_token` to send and receive the byte strings necessary to authenticate
         with the broker.
     """
+    MAX_AUTH_VERSION = 1
+    MAX_HANDSHAKE_VERSION = 1
+
     def __init__(self, mechanism, security_protocol=None):
         """
         Base class for SASL authentication mechanisms.
@@ -74,8 +77,8 @@ class BaseAuthenticator:
         log.debug("Authentication successful.")
 
     def initialize_authentication(self):
-        self._broker_connection.request(SaslHandshakeRequest(self.mechanism))
-        response = SaslHandshakeResponse(self._broker_connection.response())
+        self._broker_connection.request(SaslHandshakeRequest.get_versions()[self.handshake_version](self.mechanism))
+        response = SaslHandshakeResponse.get_versions()[self.handshake_version](self._broker_connection.response())
         if response.error_code != 0:
             if response.error_code == UnsupportedSaslMechanism.ERROR_CODE:
                 msg = "Broker only supports sasl mechanisms {}, requested was {}"
@@ -86,19 +89,29 @@ class BaseAuthenticator:
         raise NotImplementedError()
 
     def send_token(self, token):
-        self._broker_connection.request(FakeRequest(token))
+        if self.handshake_version == 0:
+            req = FakeRequest(token)
+        else:
+            req = SaslAuthenticateRequest.get_versions()[self.auth_version](token)
+        self._broker_connection.request(req)
 
     def receive_token(self):
-        return self._broker_connection.response_raw()
+        if self.handshake_version == 0:
+            return self._broker_connection.response_raw()
+
+        response = SaslAuthenticateResponse.get_versions()[self.auth_version](self._broker_connection.response())
+        if response.error_code != 0:
+            raise ERROR_CODES[response.error_code](response.error_message)
+        return response.auth_bytes
 
     def fetch_api_versions(self):
-        self.handshake_version = 0
-
-        # try this later
-        # self._broker_connection.request(ApiVersionsRequest())
-        # response = ApiVersionsResponse(self._broker_connection.response())
-        # self.handshake_version = response.api_versions[17]
-        # self.auth_version = response.api_versions.get(36, None)
+        self._broker_connection.request(ApiVersionsRequest())
+        response = ApiVersionsResponse(self._broker_connection.response())
+        self.handshake_version = response.api_versions[SaslHandshakeRequest.API_KEY].max
+        self.auth_version = response.api_versions.get(SaslAuthenticateRequest.API_KEY, None)
+        self.handshake_version = min(self.MAX_HANDSHAKE_VERSION, self.handshake_version)
+        if self.auth_version is not None:
+            self.auth_version = min(self.auth_version.max, self.MAX_AUTH_VERSION)
 
 
 class ScramAuthenticator(BaseAuthenticator):
