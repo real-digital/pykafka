@@ -9,7 +9,11 @@ def test_sasl_roundtrip(sasl_kafka, authenticator, kafka_version):
     This is mostly important to test the pykafka.rdkafka classes, which
     should be passed SASL settings during producer/consumer init.
     """
-    client = KafkaClient(sasl_kafka.brokers_sasl, sasl_authenticator=authenticator, broker_version=kafka_version)
+    client = KafkaClient(
+        sasl_kafka.brokers_sasl,
+        sasl_authenticator=authenticator,
+        broker_version=".".join(str(v) for v in kafka_version),
+    )
 
     topic_name = uuid4().hex.encode()
     payload = uuid4().hex.encode()
