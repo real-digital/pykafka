@@ -89,6 +89,7 @@ class BaseAuthenticator:
         raise NotImplementedError()
 
     def send_token(self, token):
+        log.debug("Seding auth token")
         if self.handshake_version == 0:
             req = FakeRequest(token)
         else:
@@ -96,15 +97,18 @@ class BaseAuthenticator:
         self._broker_connection.request(req)
 
     def receive_token(self):
+        log.debug("Receiving auth token")
         if self.handshake_version == 0:
             return self._broker_connection.response_raw()
 
-        response = SaslAuthenticateResponse.get_versions()[self.auth_version](self._broker_connection.response())
+        data = self._broker_connection.response()
+        response = SaslAuthenticateResponse.get_versions()[self.auth_version](data)
         if response.error_code != 0:
             raise ERROR_CODES[response.error_code](response.error_message)
         return response.auth_bytes
 
     def fetch_api_versions(self):
+        log.debug("Fetch SASL authentication api versions.")
         self._broker_connection.request(ApiVersionsRequest())
         response = ApiVersionsResponse(self._broker_connection.response())
         self.handshake_version = response.api_versions[SaslHandshakeRequest.API_KEY].max
@@ -112,7 +116,9 @@ class BaseAuthenticator:
         self.handshake_version = min(self.MAX_HANDSHAKE_VERSION, self.handshake_version)
         if self.auth_version is not None:
             self.auth_version = min(self.auth_version.max, self.MAX_AUTH_VERSION)
-
+        log.debug("Determinded handshake api version {} and authenticate api version {}".format(
+            self.handshake_version, self.auth_version
+        ))
 
 class ScramAuthenticator(BaseAuthenticator):
     """
