@@ -83,6 +83,7 @@ before_script:
     - while true; do sleep 1; echo "Waiting for cluster..."; if [[ `grep ZOOKEEPER $TEMPFILE` ]]; then break; fi; done
     - export `grep BROKERS $TEMPFILE`
     - export `grep BROKERS_SSL $TEMPFILE`
+    - export `grep BROKERS_SASL $TEMPFILE`
     - export `grep ZOOKEEPER $TEMPFILE`
 
 script:
