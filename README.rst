@@ -65,6 +65,13 @@ for further details):
     >>> client = KafkaClient(hosts="127.0.0.1:<ssl-port>,...",
     ...                      ssl_config=config)
 
+Or, for SASL authenticated connection, you might write (and also see i.e. ``PlainAuthenticator`` dos for further details):
+
+.. sourcecode:: python
+
+    >>> from pykafka import KafkaClient, PlainAuthenticator
+    >>> authenticator = PlainAuthenticator(user='alice', password='alice-secret')
+    >>> client = KafkaClient(hosts="127.0.0.1:<sasl-port>,...", sasl_authenticator=authenticator)
 If the cluster you've connected to has any topics defined on it, you can list
 them with:
 
@@ -178,8 +185,10 @@ of the librdkafka shared objects. You can find this location with `locate librdk
 
 After that, all that's needed is that you pass an extra parameter
 ``use_rdkafka=True`` to ``topic.get_producer()``,
-``topic.get_simple_consumer()``, or ``topic.get_balanced_consumer()``.  Note
-that some configuration options may have different optimal values; it may be
+``topic.get_simple_consumer()``, or ``topic.get_balanced_consumer()``.
+If you're using SASL authenticated connections, make sure to pass the ``security_protocol``
+parameter to your authenticator so librdkafka knows which endpoint to authenticate with.
+Note that some configuration options may have different optimal values; it may be
 worthwhile to consult librdkafka's `configuration notes`_ for this.
 
 .. _0.9.1: https://github.com/edenhill/librdkafka/releases/tag/0.9.1
