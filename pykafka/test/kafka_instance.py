@@ -558,6 +558,7 @@ class CertManager(object):
                                          '-keystore', self.keystore,
                                          '-storepass:env', 'BROKER_PASS',
                                          '-keypass:env', 'BROKER_PASS',
+                                         '-keyalg', 'RSA',
                                          '-noprompt']
         subprocess.check_call(cmd, env=env)
         cmd = ['keytool', '-certreq', '-alias', 'broker',
