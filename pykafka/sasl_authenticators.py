@@ -36,8 +36,8 @@ class BaseAuthenticator:
     Subclasses are supposed to implement:
      1. :meth:`BaseAuthenticator.get_rd_kafka_opts` which should return a dictionary
         whose items will be appended to the config given to librdkafka consumers and producers.
-     2. :meth:`BaseAuthenticator.exchange_tokens` which is supposed to use :meth:`BaseAuthenticator.send_token`
-        and :meth:`BaseAuthenticator.receive_token` to send and receive the byte strings necessary to authenticate
+     2. :meth:`BaseAuthenticator.exchange_tokens` which is supposed to use
+        :meth:`BaseAuthenticator.send_and_receive` to send and receive the byte strings necessary to authenticate
         with the broker.
     """
     MAX_AUTH_VERSION = 1
@@ -88,7 +88,11 @@ class BaseAuthenticator:
     def exchange_tokens(self):
         raise NotImplementedError()
 
-    def send_token(self, token):
+    def send_and_receive(self, token):
+        self._send_token(token)
+        return self._receive_token()
+
+    def _send_token(self, token):
         log.debug("Seding auth token")
         if self.handshake_version == 0:
             req = FakeRequest(token)
@@ -96,7 +100,7 @@ class BaseAuthenticator:
             req = SaslAuthenticateRequest.get_versions()[self.auth_version](token)
         self._broker_connection.request(req)
 
-    def receive_token(self):
+    def _receive_token(self):
         log.debug("Receiving auth token")
         if self.handshake_version == 0:
             return self._broker_connection.response_raw()
@@ -206,15 +210,11 @@ class ScramAuthenticator(BaseAuthenticator):
 
     def exchange_tokens(self):
         client_first = self.first_message()
-        self.send_token(client_first.encode())
-
-        server_first = self.receive_token().decode()
+        server_first = self.send_and_receive(client_first.encode()).decode()
         self.process_server_first_message(server_first)
 
         client_final = self.final_message()
-        self.send_token(client_final.encode())
-
-        server_final = self.receive_token().decode()
+        server_final = self.send_and_receive(client_final.encode()).decode()
         self.process_server_final_message(server_final)
 
 
@@ -248,7 +248,7 @@ class PlainAuthenticator(BaseAuthenticator):
         }
 
     def exchange_tokens(self):
-        self.send_token("\0".join([self.user, self.user, self.password]).encode())
-        response = self.receive_token()
+        token = "\0".join([self.user, self.user, self.password]).encode()
+        response = self.send_and_receive(token)
         if response != b"":
             raise AuthenticationException("Server sent unexpected response!")
