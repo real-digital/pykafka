@@ -41,6 +41,7 @@ _kafka_properties = """
 # Configurable settings
 broker.id={broker_id}
 listeners={listeners}
+advertised.listeners={listeners}
 zookeeper.connect={zk_connstr}
 log.dirs={data_dir}
 
