@@ -54,7 +54,7 @@ class SaslHandshakeResponse(Response):
 
     @classmethod
     def get_versions(cls):
-        return {0: SaslHandshakeRequest, 1: SaslHandshakeRequestV1}
+        return {0: SaslHandshakeResponse, 1: SaslHandshakeResponseV1}
 
     def __init__(self, buff):
         """Deserialize into a new Response
