@@ -91,6 +91,11 @@ class PartitionOwnedError(KafkaException):
         self.partition = partition
 
 
+class AuthenticationException(KafkaException):
+    """Indicates that something went wrong during Authentication."""
+    pass
+
+
 """
 Protocol Client Exceptions
 https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-ErrorCodes
@@ -254,6 +259,26 @@ class GroupAuthorizationFailed(ProtocolClientError):
     ERROR_CODE = 30
 
 
+class ClusteAuthorizationFailed(ProtocolClientError):
+    """Cluster authorization failed."""
+    ERROR_CODE = 31
+
+
+class UnsupportedSaslMechanism(ProtocolClientError, AuthenticationException):
+    """The broker does not support the requested SASL mechanism."""
+    ERROR_CODE = 33
+
+
+class IllegalSaslState(ProtocolClientError, AuthenticationException):
+    """Request is not valid given the current SASL state."""
+    ERROR_CODE = 34
+
+
+class SaslAuthenticationFailed(ProtocolClientError, AuthenticationException):
+    """SASL authentication failed."""
+    ERROR_CODE = 58
+
+
 ERROR_CODES = dict(
     (exc.ERROR_CODE, exc)
     for exc in (UnknownError,
@@ -276,7 +301,11 @@ ERROR_CODES = dict(
                 InvalidSessionTimeout,
                 RebalanceInProgress,
                 TopicAuthorizationFailed,
-                GroupAuthorizationFailed)
+                GroupAuthorizationFailed,
+                ClusteAuthorizationFailed,
+                UnsupportedSaslMechanism,
+                IllegalSaslState,
+                SaslAuthenticationFailed)
 )
 
 

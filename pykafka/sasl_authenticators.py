@@ -9,6 +9,7 @@ import six
 
 from pykafka.protocol import SaslHandshakeResponse
 from .protocol import SaslHandshakeRequest
+from .exceptions import AuthenticationException, UnsupportedSaslMechanism, ERROR_CODES
 
 log = logging.getLogger(__name__)
 
@@ -56,9 +57,10 @@ class BaseAuthenticator:
         self._broker_connection.request(SaslHandshakeRequest(self.mechanism))
         response = SaslHandshakeResponse(self._broker_connection.response())
         if response.error_code != 0:
-            # Todo: create correct exception here
-            msg = "Broker only supports sasl mechanisms {}, requested was {}"
-            raise RuntimeError(msg.format(",".join(response.mechanisms), self.mechanism))
+            if response.error_code == UnsupportedSaslMechanism.ERROR_CODE:
+                msg = "Broker only supports sasl mechanisms {}, requested was {}"
+                raise UnsupportedSaslMechanism(msg.format(",".join(response.mechanisms), self.mechanism))
+            raise ERROR_CODES[response.error_code]("Authentication Handshake failed")
 
     def exchange_tokens(self):
         raise NotImplementedError()
@@ -109,8 +111,7 @@ class ScramAuthenticator(BaseAuthenticator):
         params = dict(pair.split("=", 1) for pair in server_first_message.split(","))
         server_nonce = params["r"]
         if not server_nonce.startswith(self.nonce):
-            # Todo: create correct exception here
-            raise RuntimeError("Server nonce, did not start with client nonce!")
+            raise AuthenticationException("Server nonce, did not start with client nonce!")
         self.nonce = server_nonce
         self.auth_message += ",c=biws,r=" + self.nonce
 
@@ -137,8 +138,7 @@ class ScramAuthenticator(BaseAuthenticator):
     def process_server_final_message(self, server_final_message):
         params = dict(pair.split("=", 1) for pair in server_final_message.split(","))
         if self.server_signature != base64.b64decode(params["v"].encode()):
-            # Todo: create correct exception here
-            raise RuntimeError("Server sent wrong signature!")
+            raise AuthenticationException("Server sent wrong signature!")
 
     def get_rd_kafka_opts(self):
         return {
@@ -180,5 +180,4 @@ class PlainAuthenticator(BaseAuthenticator):
         self.send_token("\0".join([self.user, self.user, self.password]).encode())
         response = self.receive_token()
         if response != b"":
-            # Todo: create correct exception here
-            raise RuntimeError("Authentication Failed!")
+            raise AuthenticationException("Server sent unexpected response!")
