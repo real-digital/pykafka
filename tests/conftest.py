@@ -1,13 +1,15 @@
 import logging
 import os
+
 import pytest
-from pykafka.test.utils import get_cluster, stop_cluster
+
 from pykafka import PlainAuthenticator, ScramAuthenticator
-from pykafka.test.kafka_instance import SASL_USER, SASL_PASSWORD
+from pykafka.test.kafka_instance import SASL_PASSWORD, SASL_USER
+from pykafka.test.utils import get_cluster, stop_cluster
 
 logging.basicConfig(level=logging.DEBUG)
 
-KAFKA_VERSION = tuple(int(v) for v in os.environ.get('KAFKA_VERSION', '0.8.0').split('.'))
+KAFKA_VERSION = tuple(int(v) for v in os.environ.get("KAFKA_VERSION", "0.8.0").split("."))
 
 
 @pytest.fixture
@@ -32,13 +34,15 @@ def kafka_version():
 )
 def authenticator(request):
     sasl_mechanism = request.param
-    if sasl_mechanism.startswith('SCRAM'):
-        return ScramAuthenticator(sasl_mechanism, user=SASL_USER, password=SASL_PASSWORD)
+    if sasl_mechanism.startswith("SCRAM"):
+        return ScramAuthenticator(
+            sasl_mechanism, user=SASL_USER, password=SASL_PASSWORD, security_protocol="SASL_PLAINTEXT"
+        )
     else:
-        return PlainAuthenticator(user=SASL_USER, password=SASL_PASSWORD)
+        return PlainAuthenticator(user=SASL_USER, password=SASL_PASSWORD, security_protocol="SASL_PLAINTEXT")
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def kafka():
     kafka = get_cluster()
     yield kafka

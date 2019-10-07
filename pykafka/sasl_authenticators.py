@@ -8,8 +8,8 @@ from uuid import uuid4
 import six
 
 from pykafka.protocol import SaslHandshakeResponse
+from .exceptions import AuthenticationException, ERROR_CODES, UnsupportedSaslMechanism
 from .protocol import SaslHandshakeRequest
-from .exceptions import AuthenticationException, UnsupportedSaslMechanism, ERROR_CODES
 
 log = logging.getLogger(__name__)
 
@@ -31,10 +31,11 @@ class FakeRequest:
 
 
 class BaseAuthenticator:
-    def __init__(self, mechanism):
+    def __init__(self, mechanism, security_protocol=None):
         self.mechanism = mechanism
         self.handshake_version = None
         self.auth_version = None
+        self.security_protocol = security_protocol
         self._broker_connection = None
 
     def get_rd_kafka_opts(self):
@@ -44,10 +45,10 @@ class BaseAuthenticator:
         self._broker_connection = broker_connection
         if self.handshake_version is None:
             self.fetch_api_versions()
-        log.debug("Authenticating to {}:{} using mechanism {}.".format(
-            self._broker_connection.host,
-            self._broker_connection.port,
-            self.mechanism)
+        log.debug(
+            "Authenticating to {}:{} using mechanism {}.".format(
+                self._broker_connection.host, self._broker_connection.port, self.mechanism
+            )
         )
         self.initialize_authentication()
         self.exchange_tokens()
@@ -84,8 +85,8 @@ class BaseAuthenticator:
 class ScramAuthenticator(BaseAuthenticator):
     MECHANISMS = {"SCRAM-SHA-256": ("sha256", hashlib.sha256), "SCRAM-SHA-512": ("sha512", hashlib.sha512)}
 
-    def __init__(self, mechanism, user, password):
-        super(ScramAuthenticator, self).__init__(mechanism)
+    def __init__(self, mechanism, user, password, security_protocol=None):
+        super(ScramAuthenticator, self).__init__(mechanism, security_protocol)
         self.nonce = None
         self.auth_message = None
         self.salted_password = None
@@ -145,7 +146,7 @@ class ScramAuthenticator(BaseAuthenticator):
             "sasl.mechanisms": self.mechanism,
             "sasl.username": self.user,
             "sasl.password": self.password.decode(),
-            'security.protocol': 'SASL_PLAINTEXT',  # TODO determine this properly
+            "security.protocol": self.security_protocol,
         }
 
     def exchange_tokens(self):
@@ -163,8 +164,8 @@ class ScramAuthenticator(BaseAuthenticator):
 
 
 class PlainAuthenticator(BaseAuthenticator):
-    def __init__(self, user, password):
-        super(PlainAuthenticator, self).__init__("PLAIN")
+    def __init__(self, user, password, security_protocol=None):
+        super(PlainAuthenticator, self).__init__("PLAIN", security_protocol)
         self.user = user
         self.password = password
 
@@ -173,7 +174,7 @@ class PlainAuthenticator(BaseAuthenticator):
             "sasl.mechanisms": self.mechanism,
             "sasl.username": self.user,
             "sasl.password": self.password,
-            'security.protocol': 'SASL_PLAINTEXT',  # TODO determine this properly
+            "security.protocol": self.security_protocol,
         }
 
     def exchange_tokens(self):
