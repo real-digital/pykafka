@@ -26,7 +26,8 @@ from .offset_commit import (GroupCoordinatorRequest, GroupCoordinatorResponse,
                             OffsetFetchRequestV1, OffsetFetchResponseV1,
                             OffsetFetchRequestV2, OffsetFetchResponseV2)
 from .produce import ProduceRequest, ProduceResponse, ProducePartitionResponse
-from .sasl import SaslHandshakeRequest, SaslHandshakeRequestV1, SaslHandshakeResponse, SaslHandshakeResponseV1
+from .sasl import (SaslHandshakeRequest, SaslHandshakeRequestV1, SaslHandshakeResponse, SaslHandshakeResponseV1,
+                   SaslAuthenticateRequest, SaslAuthenticateRquestV1, SaslAuthenticateResponse, SaslAuthenticateResponseV1)
 
 """
 Author: Keith Bourgoin, Emmett Butler
@@ -81,4 +82,6 @@ __all__ = ["MetadataRequest", "MetadataResponse", "ProduceRequest", "ProduceResp
            "MetadataRequestV2", "MetadataResponseV2", "MetadataRequestV3",
            "MetadataResponseV3", "MetadataRequestV4", "MetadataResponseV4",
            "MetadataRequestV5", "MetadataResponseV5", "SaslHandshakeRequest",
-           "SaslHandshakeRequestV1", "SaslHandshakeResponse", "SaslHandshakeResponseV1"]
+           "SaslHandshakeRequestV1", "SaslHandshakeResponse", "SaslHandshakeResponseV1",
+           "SaslAuthenticateRequest", "SaslAuthenticateRquestV1", "SaslAuthenticateResponse",
+           "SaslAuthenticateResponseV1"]
