@@ -641,6 +641,9 @@ if __name__ == '__main__':
                             bin_dir=args.download_dir)
     print('Cluster started.')
     print('Brokers: {brokers}'.format(brokers=cluster.brokers))
+    print('SSL Brokers: {brokers}'.format(brokers=cluster.brokers_ssl))
+    print('SASL Brokers: {brokers}'.format(brokers=cluster.brokers_sasl))
+    print('Log dir: {log_dirs}'.format(log_dirs=cluster._log_dir))
     print('Zookeeper: {zk}'.format(zk=cluster.zookeeper))
     print('Waiting for SIGINT to exit.')
 
