@@ -248,9 +248,10 @@ class RdKafkaSimpleConsumer(SimpleConsumer):
             # queued.max.messages.kbytes so for now we infer the implied
             # maximum (which, with default settings, is ~2GB per partition):
             "queued.min.messages": self._queued_max_messages,
-            "queued.max.messages.kbytes": str(
-                self._queued_max_messages
-                * self._fetch_message_max_bytes // 1024),
+            "queued.max.messages.kbytes": min(
+                2097151,
+                self._queued_max_messages * self._fetch_message_max_bytes // 1024
+            ),
 
             "fetch.wait.max.ms": self._fetch_wait_max_ms,
             "fetch.message.max.bytes": self._fetch_message_max_bytes,
