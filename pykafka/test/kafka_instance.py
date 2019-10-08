@@ -326,10 +326,23 @@ class KafkaInstance(ManagedInstance):
 
         # Process is started when the port isn't free anymore
         all_ports = [zk_port] + broker_ports + broker_ssl_ports + broker_sasl_ports
-        for i in range(180):
+        all_procs = [('zookeeper', self._zk_proc)]
+        for i, broker_proc in enumerate(self._broker_procs):
+            all_procs.append(("broker_{}".format(i), broker_proc))
+
+        for _ in range(180):
             if all(not self._is_port_free(port) for port in all_ports):
                 log.info('Kafka cluster started.')
                 return  # hooray! success
+            if any(proc.poll() is not None for _, proc in all_procs):
+                msg = "One or more processes terminated already!"
+                for name, proc in all_procs:
+                    returncode = proc.poll()
+                    if returncode is None:
+                        msg += "\n {} is still running".format(name)
+                    else:
+                        msg += "\n  {} exited with {}".format(name, returncode)
+                raise ProcessNotStartingError(msg)
             log.info('Waiting for cluster to start....')
             time.sleep(6)  # Waits 60s total
         # If it got this far, it's an error
