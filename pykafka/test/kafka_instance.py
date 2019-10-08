@@ -326,7 +326,7 @@ class KafkaInstance(ManagedInstance):
 
         # Process is started when the port isn't free anymore
         all_ports = [zk_port] + broker_ports + broker_ssl_ports + broker_sasl_ports
-        for i in range(10):
+        for i in range(180):
             if all(not self._is_port_free(port) for port in all_ports):
                 log.info('Kafka cluster started.')
                 return  # hooray! success
