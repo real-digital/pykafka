@@ -80,7 +80,16 @@ before_script:
     - export CFLAGS="-coverage"
     - TEMPFILE=`tempfile`
     - python -m pykafka.test.kafka_instance 3 --kafka-version $KAFKA_VERSION --download-dir $KAFKA_BIN --export-hosts $TEMPFILE &
-    - while true; do sleep 1; echo "Waiting for cluster..."; if [[ `grep ZOOKEEPER $TEMPFILE` ]]; then break; fi; done
+    - |
+      start=$(date +%s)
+      until grep ZOOKEEPER $TEMPFILE 1>/dev/null 2>/dev/null; do
+        sleep 1
+        echo "Waiting for cluster..."
+        if [[ $(($(date +%s) - start)) -gt 30 ]]; then
+          echo "Timeout waiting for cluster!"
+          exit 1
+        fi;
+      done
     - export `grep BROKERS $TEMPFILE`
     - export `grep BROKERS_SSL $TEMPFILE`
     - export `grep BROKERS_SASL $TEMPFILE`
