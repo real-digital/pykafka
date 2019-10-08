@@ -79,7 +79,8 @@ before_script:
     - export LD_LIBRARY_PATH=$HOME/lib:$LD_LIBRARY_PATH
     - export CFLAGS="-coverage"
     - TEMPFILE=`tempfile`
-    - python -m pykafka.test.kafka_instance 3 --kafka-version $KAFKA_VERSION --download-dir $KAFKA_BIN --export-hosts $TEMPFILE &
+    - KAFKA_LOGS=`tempfile`
+    - python -m pykafka.test.kafka_instance 3 --kafka-version $KAFKA_VERSION --download-dir $KAFKA_BIN --export-hosts $TEMPFILE --log-level INFO 2>$KAFKA_LOGS &
     - |
       start=$(date +%s)
       until grep ZOOKEEPER $TEMPFILE 1>/dev/null 2>/dev/null; do
@@ -87,6 +88,7 @@ before_script:
         echo "Waiting for cluster..."
         if [[ $(($(date +%s) - start)) -gt 30 ]]; then
           echo "Timeout waiting for cluster!"
+          cat $KAFKA_LOGS
           exit 1
         fi;
       done
