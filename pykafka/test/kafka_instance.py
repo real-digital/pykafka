@@ -332,7 +332,6 @@ class KafkaInstance(ManagedInstance):
                 return  # hooray! success
             log.info('Waiting for cluster to start....')
             time.sleep(6)  # Waits 60s total
-
         # If it got this far, it's an error
         raise ProcessNotStartingError('Unable to start Kafka cluster.')
 
@@ -628,7 +627,26 @@ if __name__ == '__main__':
                         help='Scala version for kafka build')
     parser.add_argument('--export-hosts', type=str,
                         help='Write host strings to given file path')
+    parser.add_argument(
+        "--log-level",
+        choices=["NOTSET", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help='Set log level to given value, if "NOTSET" (default) no logging is active.',
+        default="NOTSET",
+    )
     args = parser.parse_args()
+
+    if args.log_level != "NOTSET":
+        base_logger = logging.getLogger()
+        log_level = getattr(logging, args.log_level)
+
+        formatter = logging.Formatter("%(levelname)-8s - %(name)-12s - %(message)s")
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(log_level)
+        stream_handler.setFormatter(formatter)
+
+        base_logger.setLevel(log_level)
+        base_logger.addHandler(stream_handler)
 
     _exiting = False
     def _catch_sigint(signum, frame):
