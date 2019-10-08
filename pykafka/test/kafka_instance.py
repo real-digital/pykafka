@@ -406,7 +406,7 @@ class KafkaInstance(ManagedInstance):
         new_proc = (utils.Popen(
             args=[binfile, conf],
             stderr=utils.STDOUT,
-            stdout=open(logfile, 'w'),
+            stdout=open(logfile, 'w', buffering=1),
             use_gevent=self.use_gevent,
             env={} if sasl_port is None else {'KAFKA_OPTS': '-Djava.security.auth.login.config={}'.format(jaas_conf)}
         ))
@@ -456,7 +456,7 @@ class KafkaInstance(ManagedInstance):
         self._zk_proc = utils.Popen(
             args=[binfile, conf],
             stderr=utils.STDOUT,
-            stdout=open(logfile, 'w'),
+            stdout=open(logfile, 'w', buffering=1),
             use_gevent=self.use_gevent
         )
         return port
