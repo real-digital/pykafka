@@ -82,15 +82,21 @@ before_script:
     - KAFKA_LOGS=`tempfile`
     - python -m pykafka.test.kafka_instance 3 --kafka-version $KAFKA_VERSION --download-dir $KAFKA_BIN --export-hosts $TEMPFILE --log-level INFO 2>$KAFKA_LOGS &
     - |
+      kafka_pid=$!
       start=$(date +%s)
       until grep ZOOKEEPER $TEMPFILE 1>/dev/null 2>/dev/null; do
         sleep 1
         echo "Waiting for cluster..."
-        if [[ $(($(date +%s) - start)) -gt 30 ]]; then
+        if [[ $(($(date +%s) - start)) -gt 300 ]]; then
           echo "Timeout waiting for cluster!"
           cat $KAFKA_LOGS
           exit 1
         fi;
+        if ! kill -0 "$kafka_pid" >/dev/null 2>&1 ; then
+          echo "Kafka test cluster died during startup!"
+          cat $KAFKA_LOGS
+          exit 2
+        fi
       done
     - export `grep BROKERS $TEMPFILE`
     - export `grep BROKERS_SSL $TEMPFILE`
