@@ -342,6 +342,7 @@ class KafkaInstance(ManagedInstance):
                         msg += "\n {} is still running".format(name)
                     else:
                         msg += "\n  {} exited with {}".format(name, returncode)
+
                 raise ProcessNotStartingError(msg)
             log.info('Waiting for cluster to start....')
             time.sleep(6)  # Waits 60s total
@@ -649,17 +650,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.log_level != "NOTSET":
-        base_logger = logging.getLogger()
-        log_level = getattr(logging, args.log_level)
-
-        formatter = logging.Formatter("%(levelname)-8s - %(name)-12s - %(message)s")
-
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(log_level)
-        stream_handler.setFormatter(formatter)
-
-        base_logger.setLevel(log_level)
-        base_logger.addHandler(stream_handler)
+        logging.basicConfig(level=getattr(logging, args.log_level),
+                            format='%(threadName)10s - %(levelname)-8s - %(name)-12s - %(message)s')
 
     _exiting = False
     def _catch_sigint(signum, frame):
