@@ -38,6 +38,7 @@ env:
   global:
       - PATH="/usr/lib/ccache:$PATH"
       - KAFKA_BIN="$HOME/kafka-bin"
+      - PYTHONUNBUFFERED=1
 
 addons:
   apt:
