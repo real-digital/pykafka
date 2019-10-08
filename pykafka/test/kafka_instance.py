@@ -200,6 +200,8 @@ class KafkaInstance(ManagedInstance):
         self._processes = []
         self._broker_procs = []
         self._brokers_started = 0  # incremented by _start_broker
+        self._all_log_files = {}
+        self._all_procs = {}
         self.zookeeper = None
         self.brokers = None
         self.brokers_ssl = None
@@ -326,22 +328,24 @@ class KafkaInstance(ManagedInstance):
 
         # Process is started when the port isn't free anymore
         all_ports = [zk_port] + broker_ports + broker_ssl_ports + broker_sasl_ports
-        all_procs = [('zookeeper', self._zk_proc)]
-        for i, broker_proc in enumerate(self._broker_procs):
-            all_procs.append(("broker_{}".format(i), broker_proc))
 
         for _ in range(180):
             if all(not self._is_port_free(port) for port in all_ports):
                 log.info('Kafka cluster started.')
                 return  # hooray! success
-            if any(proc.poll() is not None for _, proc in all_procs):
+            if any(proc.poll() is not None for proc in self._all_procs.values()):
                 msg = "One or more processes terminated already!"
-                for name, proc in all_procs:
+                for name, proc in self._all_procs.items():
                     returncode = proc.poll()
                     if returncode is None:
                         msg += "\n {} is still running".format(name)
                     else:
                         msg += "\n  {} exited with {}".format(name, returncode)
+                        log.error("{} exited with {}".format(name, returncode))
+                        log.error("{} logs:".format(name))
+                        with open(self._all_log_files[name], 'r') as o:
+                            for line in o:
+                                log.error(line)
 
                 raise ProcessNotStartingError(msg)
             log.info('Waiting for cluster to start....')
@@ -412,6 +416,8 @@ class KafkaInstance(ManagedInstance):
             env={} if sasl_port is None else {'KAFKA_OPTS': '-Djava.security.auth.login.config={}'.format(jaas_conf)}
         ))
         self._broker_procs.append(new_proc)
+        self._all_procs["kafka_{}".format(i)] = new_proc
+        self._all_log_files["kafka_{}".format(i)] = logfile
 
         # add localhost:port to internal list of (ssl)brokers
         self._add_broker(port)
@@ -460,6 +466,9 @@ class KafkaInstance(ManagedInstance):
             stdout=open(logfile, 'w', buffering=1),
             use_gevent=self.use_gevent
         )
+
+        self._all_procs["zookeeper"] = self._zk_proc
+        self._all_log_files["zookeeper"] = logfile
         return port
 
     def terminate(self):
