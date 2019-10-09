@@ -236,8 +236,7 @@ class KafkaInstance(ManagedInstance):
 
     def _download_kafka(self):
         """Make sure the Kafka code has been downloaded to the right dir."""
-        binfile = os.path.join(self._bin_dir,
-                               'bin/kafka-server-start.sh')
+        binfile = os.path.join(self._bin_dir, 'bin/kafka-server-start.sh')
         if os.path.exists(binfile):
             return  # already there
 
@@ -264,8 +263,23 @@ class KafkaInstance(ManagedInstance):
         p1.stdout.close()
         output, err = p2.communicate()
         os.chdir(curr_dir)
-
+        if (1, 0, 0) <= self._kafka_version < (1, 1, 1):
+            # java version parsing is broken for some java versions in this kafka version range
+            log.info("Fixing java version parser in kafka-run-class.sh")
+            self._fix_run_class_sh()
         log.info('Downloaded Kafka to %s', self._bin_dir)
+
+    def _fix_run_class_sh(self):
+        run_class_sh = os.path.join(self._bin_dir, 'bin/kafka-run-class.sh')
+        parser_line = "  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version \"([0-9]*).*$/\\1/p')\n"
+        with open(run_class_sh, 'r') as o:
+            script_lines = o.readlines()
+        with open(run_class_sh, 'w') as o:
+            for line in script_lines:
+                if line.strip().startswith("JAVA_MAJOR_VERSION="):
+                    o.write(parser_line)
+                else:
+                    o.write(line)
 
     def _is_port_free(self, port):
         """Check to see if a port is open"""
@@ -345,7 +359,7 @@ class KafkaInstance(ManagedInstance):
                         log.error("{} logs:".format(name))
                         with open(self._all_log_files[name], 'r') as o:
                             for line in o:
-                                log.error(line)
+                                log.error(line.strip())
 
                 raise ProcessNotStartingError(msg)
             log.info('Waiting for cluster to start....')
