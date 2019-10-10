@@ -13,7 +13,7 @@ from .managedbalancedconsumer import ManagedBalancedConsumer
 from .membershipprotocol import RangeProtocol, RoundRobinProtocol
 from .sasl_authenticators import PlainAuthenticator, ScramAuthenticator
 
-__version__ = "2.8.1-dev.2"
+__version__ = "2.8.2"
 
 
 __all__ = [
