@@ -2,7 +2,7 @@ import platform
 
 import pytest
 
-from tests.pykafka import test_ssl
+from tests.pykafka_tests import test_ssl
 
 
 @pytest.mark.skipif(platform.python_implementation() == "PyPy",

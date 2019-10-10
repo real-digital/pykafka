@@ -1,6 +1,6 @@
 import pytest
 
-from tests.pykafka import test_simpleconsumer, test_balancedconsumer
+from tests.pykafka_tests import test_simpleconsumer, test_balancedconsumer
 from pykafka.utils.compat import range
 try:
     from pykafka.rdkafka import _rd_kafka  # noqa
