@@ -28,7 +28,7 @@ else:
         return bytes(lb ^ rb for lb, rb in zip(left, right))
 
 
-class BytesWrapper:
+class BytesWrapper(object):
     """
     Class that implements :meth:`get_bytes` and wraps some payload so it can be used for
     :meth:`connection.BrokerConnection.request` during legacy sasl authentication sequence.
@@ -47,7 +47,7 @@ class BytesWrapper:
         return struct.pack("!i", len(self.payload)) + self.payload
 
 
-class BaseAuthenticator:
+class BaseAuthenticator(object):
     """
     Base class for authentication mechanisms.
     Subclasses are supposed to implement:
