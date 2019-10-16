@@ -178,6 +178,6 @@ class SaslAuthenticateResponseV1(SaslAuthenticateResponse):
         response = struct_helpers.unpack_from(fmt, buff, 0)
 
         self.error_code = response[0]
-        self.error_message = response[1].decode()
+        self.error_message = response[1].decode() if response[1] is not None else None
         self.auth_bytes = response[2]
         self.session_lifetime_ms = response[3]
