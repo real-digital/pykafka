@@ -287,7 +287,8 @@ class Broker(object):
             self.host, self.port, self._handler,
             buffer_size=self._buffer_size,
             source_host=self._source_host, source_port=self._source_port,
-            ssl_config=self._ssl_config)
+            ssl_config=self._ssl_config,
+            sasl_authenticator=self._sasl_authenticator)
         self._offsets_channel_connection.connect(self._offsets_channel_socket_timeout_ms,
                                                  attempts=attempts)
         self._offsets_channel_req_handler = RequestHandler(
